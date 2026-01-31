@@ -1,0 +1,28 @@
+[package]
+name = "asanaclient-mcp"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "MCP server for Asana API integration"
+documentation = "https://docs.rs/asanaclient-mcp"
+readme = "README.md"
+keywords = ["asana", "mcp", "model-context-protocol", "ai", "tools"]
+categories = ["command-line-utilities", "api-bindings"]
+
+[[bin]]
+name = "asanaclient-mcp"
+path = "src/main.rs"
+
+[dependencies]
+asanaclient.workspace = true
+tokio.workspace = true
+rmcp.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+schemars.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+cargo-husky.workspace = true

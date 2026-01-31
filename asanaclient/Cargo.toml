@@ -1,0 +1,24 @@
+[package]
+name = "asanaclient"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Rust SDK for the Asana API"
+documentation = "https://docs.rs/asanaclient"
+readme = "README.md"
+keywords = ["asana", "api", "sdk", "tasks", "projects"]
+categories = ["api-bindings", "asynchronous"]
+
+[dependencies]
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+url.workspace = true
+
+[dev-dependencies]
+tokio-test.workspace = true
+wiremock.workspace = true
+cargo-husky.workspace = true
