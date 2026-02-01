@@ -5,7 +5,8 @@ use crate::{Client, Error};
 
 /// Fields to request for a basic portfolio fetch.
 pub const PORTFOLIO_FIELDS: &str = "gid,name,color,owner,owner.name,workspace,\
-    current_status_update,current_status_update.status_type,current_status_update.title,\
+    current_status_update,current_status_update.gid,current_status_update.status_type,\
+    current_status_update.title,current_status_update.text,\
     created_at,created_by,permalink_url,public";
 
 /// Fields to request for portfolio items.
@@ -146,7 +147,7 @@ impl Client {
             for item_ref in item_refs {
                 let expanded = match item_ref.resource_type.as_str() {
                     "project" => {
-                        let project = self.projects().get(&item_ref.gid).await?;
+                        let project = self.projects().get_full(&item_ref.gid).await?;
                         PortfolioItemExpanded::Project(Box::new(project))
                     }
                     "portfolio" => {

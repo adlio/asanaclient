@@ -32,6 +32,8 @@ pub struct StatusUpdateRef {
     pub gid: Gid,
     /// The title of the status update.
     pub title: Option<String>,
+    /// The text content of the status update.
+    pub text: Option<String>,
     /// The color indicating the status.
     pub status_type: Option<StatusColor>,
 }
