@@ -29,8 +29,23 @@
 mod client;
 mod error;
 
+pub mod api;
+pub mod types;
+
+// Re-export the main client and error types.
 pub use client::Client;
 pub use error::Error;
+
+// Re-export commonly used API types.
+pub use api::{
+    FavoritesData, FetchFavoritesOptions, PortfolioWithItems, ProjectWithContext, TaskWithContext,
+};
+
+// Re-export core data types.
+pub use types::{
+    CustomFieldValue, FavoriteItem, Gid, Portfolio, Project, ResourceRef, StatusColor, Story, Task,
+    User, Workspace,
+};
 
 /// Result type alias using the crate's error type.
 pub type Result<T> = std::result::Result<T, Error>;

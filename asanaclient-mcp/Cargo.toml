@@ -26,3 +26,4 @@ thiserror.workspace = true
 [dev-dependencies]
 tokio-test.workspace = true
 cargo-husky.workspace = true
+wiremock.workspace = true
