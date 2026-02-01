@@ -1,5 +1,9 @@
 # asanaclient
 
+[![CI](https://github.com/adlio/asanaclient/actions/workflows/ci.yml/badge.svg)](https://github.com/adlio/asanaclient/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/adlio/asanaclient/branch/main/graph/badge.svg)](https://codecov.io/gh/adlio/asanaclient)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
 A Rust SDK and MCP server for the [Asana API](https://developers.asana.com/reference/rest-api-reference).
 
 ## Crates
