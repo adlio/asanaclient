@@ -32,17 +32,28 @@ pub struct GetFavoritesParams {
     /// Whether to include full portfolio details (default: true).
     #[serde(default = "default_true")]
     pub include_portfolios: bool,
-    /// Maximum depth for recursive portfolio fetching (default: 3, max: 5).
+    /// Depth for recursive portfolio fetching. Use -1 for unlimited, 0 for no items,
+    /// or a positive number for that many levels (default: 3).
     #[serde(default = "default_depth")]
-    pub portfolio_depth: usize,
+    pub portfolio_depth: i32,
 }
 
 fn default_true() -> bool {
     true
 }
 
-fn default_depth() -> usize {
+fn default_depth() -> i32 {
     3
+}
+
+/// Convert a depth parameter to `Option<usize>`.
+/// -1 means unlimited (None), 0+ means that many levels.
+fn depth_to_option(depth: i32) -> Option<usize> {
+    if depth < 0 {
+        None
+    } else {
+        Some(depth as usize)
+    }
 }
 
 /// Parameters for getting a project.
@@ -57,9 +68,11 @@ pub struct GetProjectParams {
 pub struct GetPortfolioParams {
     /// The GID of the portfolio to retrieve.
     pub portfolio_gid: String,
-    /// Maximum depth for recursive portfolio fetching (default: 3, max: 5).
+    /// Depth for recursive portfolio fetching. Use -1 for unlimited, 0 for just
+    /// the portfolio metadata, or a positive number for that many levels of
+    /// children (default: 3).
     #[serde(default = "default_depth")]
-    pub depth: usize,
+    pub depth: i32,
 }
 
 /// Parameters for getting a task.
@@ -161,7 +174,7 @@ impl AsanaServer {
         params: Parameters<GetFavoritesParams>,
     ) -> Result<CallToolResult, McpError> {
         let params = params.0;
-        let depth = params.portfolio_depth.min(5);
+        let depth = depth_to_option(params.portfolio_depth);
 
         let favorites = self
             .client
@@ -186,11 +199,7 @@ impl AsanaServer {
                     }
                 }
                 "portfolio" if params.include_portfolios => {
-                    match self
-                        .client
-                        .get_portfolio_recursive(&item.gid, Some(depth))
-                        .await
-                    {
+                    match self.client.get_portfolio_recursive(&item.gid, depth).await {
                         Ok(portfolio) => portfolios.push(portfolio),
                         Err(e) => errors.push(FavoriteError {
                             item,
@@ -234,11 +243,11 @@ impl AsanaServer {
         params: Parameters<GetPortfolioParams>,
     ) -> Result<CallToolResult, McpError> {
         let params = params.0;
-        let depth = params.depth.min(5);
+        let depth = depth_to_option(params.depth);
 
         let portfolio = self
             .client
-            .get_portfolio_recursive(&params.portfolio_gid, Some(depth))
+            .get_portfolio_recursive(&params.portfolio_gid, depth)
             .await
             .map_err(|e| to_mcp_error("Failed to get portfolio", e))?;
 
