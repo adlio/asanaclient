@@ -97,6 +97,14 @@ impl<'a> ProjectsApi<'a> {
         )];
         self.client.get_all(&path, &query).await
     }
+
+    /// Get tasks in a project with full fields for recursive fetching.
+    pub(crate) async fn tasks_full(&self, gid: &str) -> Result<Vec<Task>, Error> {
+        use crate::api::tasks::RECURSIVE_TASK_FIELDS;
+        let path = format!("/projects/{}/tasks", gid);
+        let query = [("opt_fields", RECURSIVE_TASK_FIELDS)];
+        self.client.get_all(&path, &query).await
+    }
 }
 
 impl Client {

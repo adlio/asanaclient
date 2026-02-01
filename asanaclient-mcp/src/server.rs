@@ -91,6 +91,24 @@ pub struct GetTaskParams {
     pub include_comments: bool,
 }
 
+/// Parameters for getting tasks recursively from a project or portfolio.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetTasksRecursiveParams {
+    /// The GID of the project or portfolio to get tasks from.
+    /// The resource type is auto-detected.
+    pub gid: String,
+    /// Depth for subtask expansion. Use -1 for unlimited, 0 for no subtasks
+    /// (top-level tasks only), or a positive number for that many levels
+    /// of subtasks (default: 0).
+    #[serde(default)]
+    pub subtask_depth: i32,
+    /// Depth for portfolio traversal (only applies when GID is a portfolio).
+    /// Use -1 for unlimited, 0 for direct child projects only, or a positive
+    /// number for that many levels of nested portfolios (default: 3).
+    #[serde(default = "default_depth")]
+    pub portfolio_depth: i32,
+}
+
 /// Response containing user favorites with full details.
 #[derive(Debug, Serialize)]
 struct FavoritesResponse {
@@ -276,6 +294,35 @@ impl AsanaServer {
             .map_err(|e| to_mcp_error("Failed to get task", e))?;
 
         json_response(&task)
+    }
+
+    /// Get all tasks recursively from a project or portfolio.
+    #[tool(
+        description = "Get all tasks from a project or portfolio. Auto-detects resource type. \
+            For portfolios, recursively finds all projects and returns their tasks. \
+            Each task includes ALL its projects (not just ones in the queried hierarchy). \
+            Use subtask_depth to control subtask expansion: -1 for unlimited, 0 for none, N for N levels. \
+            Use portfolio_depth to control how deep to search nested portfolios: -1 for unlimited, 0 for direct projects only, N for N levels (default: 3)."
+    )]
+    async fn asana_get_tasks_recursive(
+        &self,
+        params: Parameters<GetTasksRecursiveParams>,
+    ) -> Result<CallToolResult, McpError> {
+        let params = params.0;
+        let subtask_depth = if params.subtask_depth < 0 {
+            None
+        } else {
+            Some(params.subtask_depth)
+        };
+        let portfolio_depth = Some(params.portfolio_depth);
+
+        let tasks = self
+            .client
+            .get_tasks_recursive(&params.gid, subtask_depth, portfolio_depth)
+            .await
+            .map_err(|e| to_mcp_error("Failed to get tasks", e))?;
+
+        json_response(&tasks)
     }
 }
 
