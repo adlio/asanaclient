@@ -17,29 +17,79 @@ pub struct AsanaServer {
     tool_router: ToolRouter<AsanaServer>,
 }
 
-/// Parameters for listing workspaces.
+/// Parameters for listing workspaces (no parameters needed).
 #[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct ListWorkspacesParams {}
+pub struct WorkspacesParams {}
 
-/// Parameters for getting user favorites.
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct GetFavoritesParams {
-    /// The GID of the workspace to get favorites from.
-    pub workspace_gid: String,
-    /// Whether to include full project details (default: true).
-    #[serde(default = "default_true")]
-    pub include_projects: bool,
-    /// Whether to include full portfolio details (default: true).
-    #[serde(default = "default_true")]
-    pub include_portfolios: bool,
-    /// Depth for recursive portfolio fetching. Use -1 for unlimited, 0 for no items,
-    /// or a positive number for that many levels (default: 3).
-    #[serde(default = "default_depth")]
-    pub portfolio_depth: i32,
+/// The type of resource to fetch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum ResourceType {
+    /// A project (gid = project GID)
+    Project,
+    /// A portfolio with nested items (gid = portfolio GID)
+    Portfolio,
+    /// A task with optional context (gid = task GID)
+    Task,
+    /// User's favorited projects and portfolios (gid = workspace GID)
+    Favorites,
+    /// Tasks in a project or portfolio (gid = project/portfolio GID)
+    Tasks,
+    /// Subtasks of a task (gid = parent task GID)
+    Subtasks,
+    /// Comments on a task (gid = task GID)
+    Comments,
+    /// Status updates for a project or portfolio (gid = project/portfolio GID)
+    StatusUpdates,
 }
 
-fn default_true() -> bool {
-    true
+/// Parameters for the universal get tool.
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct GetParams {
+    /// The type of resource to fetch.
+    pub resource_type: ResourceType,
+
+    /// The GID of the resource or its parent (meaning depends on resource_type).
+    /// - project/portfolio/task: the resource's GID
+    /// - favorites: the workspace GID
+    /// - tasks: the project or portfolio GID
+    /// - subtasks/comments: the task GID
+    /// - status_updates: the project or portfolio GID
+    pub gid: String,
+
+    // === Depth controls ===
+    /// Depth for recursive fetching (portfolios, tasks).
+    /// -1 = unlimited, 0 = no expansion, N = N levels.
+    /// Default: 3 for portfolios, 0 for subtasks.
+    #[serde(default)]
+    pub depth: Option<i32>,
+
+    /// Depth for subtask expansion when fetching tasks.
+    /// -1 = unlimited, 0 = no subtasks, N = N levels. Default: 0.
+    #[serde(default)]
+    pub subtask_depth: Option<i32>,
+
+    // === Include flags (for tasks) ===
+    /// Include subtask references when fetching a task. Default: true.
+    #[serde(default)]
+    pub include_subtasks: Option<bool>,
+
+    /// Include dependency/dependent references when fetching a task. Default: true.
+    #[serde(default)]
+    pub include_dependencies: Option<bool>,
+
+    /// Include comments when fetching a task. Default: true.
+    #[serde(default)]
+    pub include_comments: Option<bool>,
+
+    // === Include flags (for favorites) ===
+    /// Include projects when fetching favorites. Default: true.
+    #[serde(default)]
+    pub include_projects: Option<bool>,
+
+    /// Include portfolios when fetching favorites. Default: true.
+    #[serde(default)]
+    pub include_portfolios: Option<bool>,
 }
 
 fn default_depth() -> i32 {
@@ -54,59 +104,6 @@ fn depth_to_option(depth: i32) -> Option<usize> {
     } else {
         Some(depth as usize)
     }
-}
-
-/// Parameters for getting a project.
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct GetProjectParams {
-    /// The GID of the project to retrieve.
-    pub project_gid: String,
-}
-
-/// Parameters for getting a portfolio.
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct GetPortfolioParams {
-    /// The GID of the portfolio to retrieve.
-    pub portfolio_gid: String,
-    /// Depth for recursive portfolio fetching. Use -1 for unlimited, 0 for just
-    /// the portfolio metadata, or a positive number for that many levels of
-    /// children (default: 3).
-    #[serde(default = "default_depth")]
-    pub depth: i32,
-}
-
-/// Parameters for getting a task.
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct GetTaskParams {
-    /// The GID of the task to retrieve.
-    pub task_gid: String,
-    /// Whether to include subtasks (default: true).
-    #[serde(default = "default_true")]
-    pub include_subtasks: bool,
-    /// Whether to include dependencies and dependents (default: true).
-    #[serde(default = "default_true")]
-    pub include_dependencies: bool,
-    /// Whether to include comments (default: true).
-    #[serde(default = "default_true")]
-    pub include_comments: bool,
-}
-
-/// Parameters for getting tasks recursively from a project or portfolio.
-#[derive(Debug, Deserialize, schemars::JsonSchema)]
-pub struct GetTasksRecursiveParams {
-    /// The GID of the project or portfolio to get tasks from.
-    /// The resource type is auto-detected.
-    pub gid: String,
-    /// Depth for subtask expansion. Use -1 for unlimited, 0 for no subtasks
-    /// (top-level tasks only), or a positive number for that many levels
-    /// of subtasks (default: 0).
-    #[serde(default)]
-    pub subtask_depth: i32,
-    /// Depth for portfolio traversal (only applies when GID is a portfolio).
-    /// Use -1 for unlimited, 0 for direct child projects only, or a positive
-    /// number for that many levels of nested portfolios (default: 3).
-    #[serde(default = "default_depth")]
-    pub portfolio_depth: i32,
 }
 
 /// Response containing user favorites with full details.
@@ -168,10 +165,10 @@ impl AsanaServer {
     }
 
     /// List all workspaces accessible to the authenticated user.
-    #[tool(description = "List all workspaces accessible to the authenticated user")]
-    async fn asana_list_workspaces(
+    #[tool(description = "List all Asana workspaces accessible to the authenticated user")]
+    async fn asana_workspaces(
         &self,
-        _params: Parameters<ListWorkspacesParams>,
+        _params: Parameters<WorkspacesParams>,
     ) -> Result<CallToolResult, McpError> {
         let workspaces = self
             .client
@@ -183,146 +180,152 @@ impl AsanaServer {
         json_response(&workspaces)
     }
 
-    /// Get the current user's favorites in a workspace with full details.
-    #[tool(
-        description = "Get favorited projects and portfolios for the current user in a workspace. Returns full details including status updates and nested portfolio contents."
-    )]
-    async fn asana_get_favorites(
-        &self,
-        params: Parameters<GetFavoritesParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let params = params.0;
-        let depth = depth_to_option(params.portfolio_depth);
+    /// Universal get tool for fetching Asana resources.
+    #[tool(description = "Get any Asana resource by type and GID. Supports:\n\
+            - project: Get a project (gid = project GID)\n\
+            - portfolio: Get a portfolio with nested items (gid = portfolio GID, use depth to control recursion)\n\
+            - task: Get a task with context (gid = task GID, use include_* flags)\n\
+            - favorites: Get user's favorites (gid = workspace GID)\n\
+            - tasks: Get all tasks from a project/portfolio (gid = project/portfolio GID, use subtask_depth)\n\
+            - subtasks: Get subtasks of a task (gid = task GID)\n\
+            - comments: Get comments on a task (gid = task GID)\n\
+            - status_updates: Get status history (gid = project/portfolio GID)\n\n\
+            Depth parameters: -1 = unlimited, 0 = none, N = N levels")]
+    async fn asana_get(&self, params: Parameters<GetParams>) -> Result<CallToolResult, McpError> {
+        let p = params.0;
 
-        let favorites = self
-            .client
-            .users()
-            .favorites(&params.workspace_gid)
-            .await
-            .map_err(|e| to_mcp_error("Failed to get favorites", e))?;
+        match p.resource_type {
+            ResourceType::Project => {
+                let project = self
+                    .client
+                    .projects()
+                    .get_full(&p.gid)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get project", e))?;
+                json_response(&project)
+            }
 
-        let mut projects = Vec::new();
-        let mut portfolios = Vec::new();
-        let mut errors = Vec::new();
+            ResourceType::Portfolio => {
+                let depth = depth_to_option(p.depth.unwrap_or(default_depth()));
+                let portfolio = self
+                    .client
+                    .get_portfolio_recursive(&p.gid, depth)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get portfolio", e))?;
+                json_response(&portfolio)
+            }
 
-        for item in favorites {
-            match item.resource_type.as_str() {
-                "project" if params.include_projects => {
-                    match self.client.projects().get_full(&item.gid).await {
-                        Ok(project) => projects.push(project),
-                        Err(e) => errors.push(FavoriteError {
-                            item,
-                            error: e.to_string(),
-                        }),
+            ResourceType::Task => {
+                let task = self
+                    .client
+                    .get_task_with_context(
+                        &p.gid,
+                        p.include_subtasks.unwrap_or(true),
+                        p.include_dependencies.unwrap_or(true),
+                        p.include_comments.unwrap_or(true),
+                    )
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get task", e))?;
+                json_response(&task)
+            }
+
+            ResourceType::Favorites => {
+                let depth = depth_to_option(p.depth.unwrap_or(default_depth()));
+                let include_projects = p.include_projects.unwrap_or(true);
+                let include_portfolios = p.include_portfolios.unwrap_or(true);
+
+                let favorites = self
+                    .client
+                    .users()
+                    .favorites(&p.gid)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get favorites", e))?;
+
+                let mut projects = Vec::new();
+                let mut portfolios = Vec::new();
+                let mut errors = Vec::new();
+
+                for item in favorites {
+                    match item.resource_type.as_str() {
+                        "project" if include_projects => {
+                            match self.client.projects().get_full(&item.gid).await {
+                                Ok(project) => projects.push(project),
+                                Err(e) => errors.push(FavoriteError {
+                                    item,
+                                    error: e.to_string(),
+                                }),
+                            }
+                        }
+                        "portfolio" if include_portfolios => {
+                            match self.client.get_portfolio_recursive(&item.gid, depth).await {
+                                Ok(portfolio) => portfolios.push(portfolio),
+                                Err(e) => errors.push(FavoriteError {
+                                    item,
+                                    error: e.to_string(),
+                                }),
+                            }
+                        }
+                        _ => {}
                     }
                 }
-                "portfolio" if params.include_portfolios => {
-                    match self.client.get_portfolio_recursive(&item.gid, depth).await {
-                        Ok(portfolio) => portfolios.push(portfolio),
-                        Err(e) => errors.push(FavoriteError {
-                            item,
-                            error: e.to_string(),
-                        }),
-                    }
-                }
-                _ => {}
+
+                json_response(&FavoritesResponse {
+                    projects,
+                    portfolios,
+                    errors,
+                })
+            }
+
+            ResourceType::Tasks => {
+                let subtask_depth = p
+                    .subtask_depth
+                    .map(|d| if d < 0 { None } else { Some(d) })
+                    .unwrap_or(Some(0));
+                let portfolio_depth = Some(p.depth.unwrap_or(default_depth()));
+
+                let tasks = self
+                    .client
+                    .get_tasks_recursive(&p.gid, subtask_depth, portfolio_depth)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get tasks", e))?;
+                json_response(&tasks)
+            }
+
+            ResourceType::Subtasks => {
+                let subtasks = self
+                    .client
+                    .tasks()
+                    .subtasks(&p.gid)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get subtasks", e))?;
+                json_response(&subtasks)
+            }
+
+            ResourceType::Comments => {
+                let comments = self
+                    .client
+                    .tasks()
+                    .comments(&p.gid)
+                    .await
+                    .map_err(|e| to_mcp_error("Failed to get comments", e))?;
+                json_response(&comments)
+            }
+
+            ResourceType::StatusUpdates => {
+                // Try as project first, then as portfolio
+                let updates = match self.client.projects().status_updates(&p.gid).await {
+                    Ok(updates) => updates,
+                    Err(asanaclient::Error::NotFound(_)) => self
+                        .client
+                        .portfolios()
+                        .status_updates(&p.gid)
+                        .await
+                        .map_err(|e| to_mcp_error("Failed to get status updates", e))?,
+                    Err(e) => return Err(to_mcp_error("Failed to get status updates", e)),
+                };
+                json_response(&updates)
             }
         }
-
-        json_response(&FavoritesResponse {
-            projects,
-            portfolios,
-            errors,
-        })
-    }
-
-    /// Get a single project by its GID.
-    #[tool(description = "Get a project by its GID with full details including status updates")]
-    async fn asana_get_project(
-        &self,
-        params: Parameters<GetProjectParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let project = self
-            .client
-            .projects()
-            .get_full(&params.0.project_gid)
-            .await
-            .map_err(|e| to_mcp_error("Failed to get project", e))?;
-
-        json_response(&project)
-    }
-
-    /// Get a portfolio by its GID with recursive nesting.
-    #[tool(
-        description = "Get a portfolio by its GID with all nested items (projects and sub-portfolios) expanded recursively"
-    )]
-    async fn asana_get_portfolio(
-        &self,
-        params: Parameters<GetPortfolioParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let params = params.0;
-        let depth = depth_to_option(params.depth);
-
-        let portfolio = self
-            .client
-            .get_portfolio_recursive(&params.portfolio_gid, depth)
-            .await
-            .map_err(|e| to_mcp_error("Failed to get portfolio", e))?;
-
-        json_response(&portfolio)
-    }
-
-    /// Get a task by its GID with optional context.
-    #[tool(
-        description = "Get a task by its GID with full details including subtasks, dependencies, and comments"
-    )]
-    async fn asana_get_task(
-        &self,
-        params: Parameters<GetTaskParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let params = params.0;
-
-        let task = self
-            .client
-            .get_task_with_context(
-                &params.task_gid,
-                params.include_subtasks,
-                params.include_dependencies,
-                params.include_comments,
-            )
-            .await
-            .map_err(|e| to_mcp_error("Failed to get task", e))?;
-
-        json_response(&task)
-    }
-
-    /// Get all tasks recursively from a project or portfolio.
-    #[tool(
-        description = "Get all tasks from a project or portfolio. Auto-detects resource type. \
-            For portfolios, recursively finds all projects and returns their tasks. \
-            Each task includes ALL its projects (not just ones in the queried hierarchy). \
-            Use subtask_depth to control subtask expansion: -1 for unlimited, 0 for none, N for N levels. \
-            Use portfolio_depth to control how deep to search nested portfolios: -1 for unlimited, 0 for direct projects only, N for N levels (default: 3)."
-    )]
-    async fn asana_get_tasks_recursive(
-        &self,
-        params: Parameters<GetTasksRecursiveParams>,
-    ) -> Result<CallToolResult, McpError> {
-        let params = params.0;
-        let subtask_depth = if params.subtask_depth < 0 {
-            None
-        } else {
-            Some(params.subtask_depth)
-        };
-        let portfolio_depth = Some(params.portfolio_depth);
-
-        let tasks = self
-            .client
-            .get_tasks_recursive(&params.gid, subtask_depth, portfolio_depth)
-            .await
-            .map_err(|e| to_mcp_error("Failed to get tasks", e))?;
-
-        json_response(&tasks)
     }
 }
 
@@ -377,10 +380,25 @@ mod tests {
             .text
     }
 
-    // ========== list_workspaces tests ==========
+    /// Helper to create GetParams with defaults.
+    fn get_params(resource_type: ResourceType, gid: &str) -> Parameters<GetParams> {
+        Parameters(GetParams {
+            resource_type,
+            gid: gid.to_string(),
+            depth: None,
+            subtask_depth: None,
+            include_subtasks: None,
+            include_dependencies: None,
+            include_comments: None,
+            include_projects: None,
+            include_portfolios: None,
+        })
+    }
+
+    // ========== asana_workspaces tests ==========
 
     #[tokio::test]
-    async fn test_list_workspaces_success() {
+    async fn test_workspaces_success() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
@@ -397,9 +415,10 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(ListWorkspacesParams {});
-
-        let result = server.asana_list_workspaces(params).await.unwrap();
+        let result = server
+            .asana_workspaces(Parameters(WorkspacesParams {}))
+            .await
+            .unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("My Workspace"));
@@ -408,7 +427,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_list_workspaces_empty() {
+    async fn test_workspaces_empty() {
         let mock_server = MockServer::start().await;
 
         Mock::given(method("GET"))
@@ -423,14 +442,14 @@ mod tests {
 
         let server = test_server(&mock_server.uri());
         let result = server
-            .asana_list_workspaces(Parameters(ListWorkspacesParams {}))
+            .asana_workspaces(Parameters(WorkspacesParams {}))
             .await
             .unwrap();
 
         assert!(get_response_text(&result).contains("[]"));
     }
 
-    // ========== get_project tests ==========
+    // ========== asana_get project tests ==========
 
     #[tokio::test]
     async fn test_get_project_success() {
@@ -451,11 +470,10 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetProjectParams {
-            project_gid: "proj123".to_string(),
-        });
-
-        let result = server.asana_get_project(params).await.unwrap();
+        let result = server
+            .asana_get(get_params(ResourceType::Project, "proj123"))
+            .await
+            .unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("Test Project"));
@@ -473,18 +491,16 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetProjectParams {
-            project_gid: "missing".to_string(),
-        });
-
-        let result = server.asana_get_project(params).await;
+        let result = server
+            .asana_get(get_params(ResourceType::Project, "missing"))
+            .await;
 
         assert!(result.is_err());
         let err = result.unwrap_err();
         assert!(err.message.contains("Failed to get project"));
     }
 
-    // ========== get_task tests ==========
+    // ========== asana_get task tests ==========
 
     #[tokio::test]
     async fn test_get_task_success() {
@@ -547,14 +563,10 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetTaskParams {
-            task_gid: "task123".to_string(),
-            include_subtasks: true,
-            include_dependencies: true,
-            include_comments: true,
-        });
-
-        let result = server.asana_get_task(params).await.unwrap();
+        let result = server
+            .asana_get(get_params(ResourceType::Task, "task123"))
+            .await
+            .unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("Test Task"));
@@ -580,21 +592,26 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetTaskParams {
-            task_gid: "task456".to_string(),
-            include_subtasks: false,
-            include_dependencies: false,
-            include_comments: false,
+        let params = Parameters(GetParams {
+            resource_type: ResourceType::Task,
+            gid: "task456".to_string(),
+            depth: None,
+            subtask_depth: None,
+            include_subtasks: Some(false),
+            include_dependencies: Some(false),
+            include_comments: Some(false),
+            include_projects: None,
+            include_portfolios: None,
         });
 
-        let result = server.asana_get_task(params).await.unwrap();
+        let result = server.asana_get(params).await.unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("Minimal Task"));
         assert!(text.contains("task456"));
     }
 
-    // ========== get_portfolio tests ==========
+    // ========== asana_get portfolio tests ==========
 
     #[tokio::test]
     async fn test_get_portfolio_success() {
@@ -639,19 +656,26 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetPortfolioParams {
-            portfolio_gid: "port123".to_string(),
-            depth: 1,
+        let params = Parameters(GetParams {
+            resource_type: ResourceType::Portfolio,
+            gid: "port123".to_string(),
+            depth: Some(1),
+            subtask_depth: None,
+            include_subtasks: None,
+            include_dependencies: None,
+            include_comments: None,
+            include_projects: None,
+            include_portfolios: None,
         });
 
-        let result = server.asana_get_portfolio(params).await.unwrap();
+        let result = server.asana_get(params).await.unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("Test Portfolio"));
         assert!(text.contains("Project in Portfolio"));
     }
 
-    // ========== get_favorites tests ==========
+    // ========== asana_get favorites tests ==========
 
     #[tokio::test]
     async fn test_get_favorites_projects_only() {
@@ -684,14 +708,19 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetFavoritesParams {
-            workspace_gid: "ws123".to_string(),
-            include_projects: true,
-            include_portfolios: false,
-            portfolio_depth: 1,
+        let params = Parameters(GetParams {
+            resource_type: ResourceType::Favorites,
+            gid: "ws123".to_string(),
+            depth: Some(1),
+            subtask_depth: None,
+            include_subtasks: None,
+            include_dependencies: None,
+            include_comments: None,
+            include_projects: Some(true),
+            include_portfolios: Some(false),
         });
 
-        let result = server.asana_get_favorites(params).await.unwrap();
+        let result = server.asana_get(params).await.unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("Favorite Project"));
@@ -713,26 +742,147 @@ mod tests {
             .await;
 
         let server = test_server(&mock_server.uri());
-        let params = Parameters(GetFavoritesParams {
-            workspace_gid: "ws456".to_string(),
-            include_projects: true,
-            include_portfolios: true,
-            portfolio_depth: 3,
-        });
-
-        let result = server.asana_get_favorites(params).await.unwrap();
+        let result = server
+            .asana_get(get_params(ResourceType::Favorites, "ws456"))
+            .await
+            .unwrap();
         let text = get_response_text(&result);
 
         assert!(text.contains("\"projects\": []"));
         assert!(text.contains("\"portfolios\": []"));
     }
 
+    // ========== asana_get comments tests ==========
+
+    #[tokio::test]
+    async fn test_get_comments_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/tasks/task123/stories"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"gid": "story1", "resource_subtype": "comment_added", "text": "First comment"},
+                    {"gid": "story2", "resource_subtype": "assigned", "text": "System message"},
+                    {"gid": "story3", "resource_subtype": "comment_added", "text": "Second comment"}
+                ],
+                "next_page": null
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let server = test_server(&mock_server.uri());
+        let result = server
+            .asana_get(get_params(ResourceType::Comments, "task123"))
+            .await
+            .unwrap();
+        let text = get_response_text(&result);
+
+        // Should only include comments, not system messages
+        assert!(text.contains("First comment"));
+        assert!(text.contains("Second comment"));
+    }
+
+    // ========== asana_get subtasks tests ==========
+
+    #[tokio::test]
+    async fn test_get_subtasks_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/tasks/task123/subtasks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"gid": "sub1", "name": "Subtask 1", "completed": false},
+                    {"gid": "sub2", "name": "Subtask 2", "completed": true}
+                ],
+                "next_page": null
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let server = test_server(&mock_server.uri());
+        let result = server
+            .asana_get(get_params(ResourceType::Subtasks, "task123"))
+            .await
+            .unwrap();
+        let text = get_response_text(&result);
+
+        assert!(text.contains("Subtask 1"));
+        assert!(text.contains("Subtask 2"));
+    }
+
+    // ========== asana_get status_updates tests ==========
+
+    #[tokio::test]
+    async fn test_get_status_updates_project() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/projects/proj123/status_updates"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"gid": "status1", "title": "On Track", "status_type": "on_track", "text": "All good"}
+                ],
+                "next_page": null
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let server = test_server(&mock_server.uri());
+        let result = server
+            .asana_get(get_params(ResourceType::StatusUpdates, "proj123"))
+            .await
+            .unwrap();
+        let text = get_response_text(&result);
+
+        assert!(text.contains("On Track"));
+        assert!(text.contains("All good"));
+    }
+
+    // ========== asana_get tasks (recursive) tests ==========
+
+    #[tokio::test]
+    async fn test_get_tasks_from_project() {
+        let mock_server = MockServer::start().await;
+
+        // First try as project (succeeds)
+        Mock::given(method("GET"))
+            .and(path("/projects/proj123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {"gid": "proj123", "name": "Test Project"}
+            })))
+            .mount(&mock_server)
+            .await;
+
+        // Project tasks endpoint
+        Mock::given(method("GET"))
+            .and(path("/projects/proj123/tasks"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"gid": "task1", "name": "Task 1", "completed": false, "num_subtasks": 0},
+                    {"gid": "task2", "name": "Task 2", "completed": true, "num_subtasks": 0}
+                ],
+                "next_page": null
+            })))
+            .mount(&mock_server)
+            .await;
+
+        let server = test_server(&mock_server.uri());
+        let result = server
+            .asana_get(get_params(ResourceType::Tasks, "proj123"))
+            .await
+            .unwrap();
+        let text = get_response_text(&result);
+
+        assert!(text.contains("Task 1"));
+        assert!(text.contains("Task 2"));
+    }
+
     // ========== ServerHandler tests ==========
 
     #[test]
     fn test_server_info() {
-        // Can't easily create a server without a real token for this test,
-        // but we can test the handler implementation is correct
         let client = Client::new("test").unwrap();
         let server = AsanaServer::with_client(client);
         let info = server.get_info();
