@@ -38,8 +38,8 @@ pub use error::Error;
 
 // Re-export commonly used API types.
 pub use api::{
-    FavoritesData, FetchFavoritesOptions, PortfolioWithItems, ProjectWithContext, SectionsApi,
-    StatusUpdatesApi, StoriesApi, TagsApi, TaskWithContext, TemplatesApi,
+    FavoritesData, FetchFavoritesOptions, PortfolioWithItems, ProjectWithContext,
+    TaskContextOptions, TaskWithContext,
 };
 
 // Re-export core data types.

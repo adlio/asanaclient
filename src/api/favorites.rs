@@ -13,8 +13,11 @@ pub struct FetchFavoritesOptions {
     pub include_projects: bool,
     /// Whether to fetch full portfolio details (default: true).
     pub include_portfolios: bool,
-    /// Maximum depth for recursive portfolio fetching (default: 3).
-    pub portfolio_depth: usize,
+    /// Maximum depth for recursive portfolio fetching.
+    /// - `None` - Unlimited depth
+    /// - `Some(0)` - No expansion (default)
+    /// - `Some(n)` - Fetch n levels deep
+    pub portfolio_depth: Option<usize>,
     /// Whether to fetch tasks for projects (default: false).
     pub include_project_tasks: bool,
     /// Options for extracting status from custom fields.
@@ -26,7 +29,7 @@ impl Default for FetchFavoritesOptions {
         Self {
             include_projects: true,
             include_portfolios: true,
-            portfolio_depth: 0,
+            portfolio_depth: Some(0),
             include_project_tasks: false,
             status_extraction: None,
         }
@@ -46,8 +49,11 @@ impl FetchFavoritesOptions {
     }
 
     /// Set portfolio recursion depth.
-    pub fn with_portfolio_depth(mut self, depth: usize) -> Self {
-        self.portfolio_depth = depth.min(5);
+    /// - `None` - Unlimited depth
+    /// - `Some(0)` - No expansion
+    /// - `Some(n)` - Fetch n levels deep
+    pub fn with_portfolio_depth(mut self, depth: Option<usize>) -> Self {
+        self.portfolio_depth = depth;
         self
     }
 
@@ -107,26 +113,26 @@ impl Client {
     /// # async fn example() -> Result<(), asanaclient::Error> {
     /// let client = Client::from_env()?;
     /// let options = FetchFavoritesOptions::new().with_tasks();
-    /// let favorites = client.fetch_favorites("workspace_gid", options).await?;
+    /// let favorites = client.favorites("workspace_gid", options).await?;
     ///
     /// println!("Projects: {}", favorites.projects.len());
     /// println!("Portfolios: {}", favorites.portfolios.len());
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn fetch_favorites(
+    pub async fn favorites(
         &self,
         workspace_gid: &str,
         options: FetchFavoritesOptions,
     ) -> Result<FavoritesData, Error> {
         // Get favorites list
-        let favorites = self.users().favorites(workspace_gid).await?;
+        let favorites_list = self.users().favorites(workspace_gid).await?;
 
         let mut projects = Vec::new();
         let mut portfolios = Vec::new();
         let mut errors = Vec::new();
 
-        for item in favorites {
+        for item in favorites_list {
             match item.resource_type.as_str() {
                 "project" if options.include_projects => {
                     match self.fetch_project_with_context(&item.gid, &options).await {
@@ -139,7 +145,8 @@ impl Client {
                 }
                 "portfolio" if options.include_portfolios => {
                     match self
-                        .get_portfolio_recursive(&item.gid, Some(options.portfolio_depth))
+                        .portfolios()
+                        .recursive(&item.gid, options.portfolio_depth)
                         .await
                     {
                         Ok(portfolio) => portfolios.push(portfolio),
@@ -203,7 +210,7 @@ mod tests {
         let opts = FetchFavoritesOptions::new();
         assert!(opts.include_projects);
         assert!(opts.include_portfolios);
-        assert_eq!(opts.portfolio_depth, 0);
+        assert_eq!(opts.portfolio_depth, Some(0));
         assert!(!opts.include_project_tasks);
     }
 
@@ -211,15 +218,15 @@ mod tests {
     fn test_fetch_favorites_options_builder() {
         let opts = FetchFavoritesOptions::new()
             .with_tasks()
-            .with_portfolio_depth(5);
+            .with_portfolio_depth(Some(5));
 
         assert!(opts.include_project_tasks);
-        assert_eq!(opts.portfolio_depth, 5);
+        assert_eq!(opts.portfolio_depth, Some(5));
     }
 
     #[test]
-    fn test_portfolio_depth_capped() {
-        let opts = FetchFavoritesOptions::new().with_portfolio_depth(10);
-        assert_eq!(opts.portfolio_depth, 5);
+    fn test_portfolio_depth_unlimited() {
+        let opts = FetchFavoritesOptions::new().with_portfolio_depth(None);
+        assert_eq!(opts.portfolio_depth, None);
     }
 }

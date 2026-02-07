@@ -6,7 +6,7 @@ use crate::types::requests::{
     AddFollowersData, AddFollowersRequest, AddProjectData, AddProjectRequest, AddTagData,
     AddTagRequest, CreateCommentData, CreateCommentRequest, CreateTaskData, CreateTaskRequest,
     RemoveDependenciesData, RemoveDependenciesRequest, RemoveDependentsData,
-    RemoveDependentsRequest, RemoveFollowerData, RemoveFollowerRequest, RemoveProjectData,
+    RemoveDependentsRequest, RemoveFollowersData, RemoveFollowersRequest, RemoveProjectData,
     RemoveProjectRequest, RemoveTagData, RemoveTagRequest, SetParentData, SetParentRequest,
     UpdateTaskData, UpdateTaskRequest,
 };
@@ -314,12 +314,16 @@ impl<'a> TasksApi<'a> {
         self.client.post_empty(&path, &request).await
     }
 
-    /// Remove a follower from a task.
-    pub async fn remove_follower(&self, task_gid: &str, follower_gid: &str) -> Result<(), Error> {
+    /// Remove followers from a task.
+    pub async fn remove_followers(
+        &self,
+        task_gid: &str,
+        follower_gids: &[&str],
+    ) -> Result<(), Error> {
         let path = format!("/tasks/{}/removeFollowers", task_gid);
-        let request = RemoveFollowerRequest {
-            data: RemoveFollowerData {
-                followers: vec![follower_gid.to_string()],
+        let request = RemoveFollowersRequest {
+            data: RemoveFollowersData {
+                followers: follower_gids.iter().map(|s| s.to_string()).collect(),
             },
         };
         self.client.post_empty(&path, &request).await
@@ -352,33 +356,6 @@ impl<'a> TasksApi<'a> {
         };
         self.client.post(&path, &request).await
     }
-}
-
-/// A task with its related data expanded.
-#[derive(Debug, Clone, serde::Serialize)]
-pub struct TaskWithContext {
-    /// The task details.
-    #[serde(flatten)]
-    pub task: Task,
-    /// Subtasks of this task.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub subtasks: Vec<TaskRef>,
-    /// Tasks this task depends on (blockers).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub dependencies: Vec<TaskDependency>,
-    /// Tasks that depend on this task.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub dependents: Vec<TaskDependency>,
-    /// Comments on this task.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub comments: Vec<Story>,
-}
-
-impl Client {
-    /// Access the tasks API.
-    pub fn tasks(&self) -> TasksApi<'_> {
-        TasksApi::new(self)
-    }
 
     /// Get all tasks recursively from a project or portfolio.
     ///
@@ -396,7 +373,7 @@ impl Client {
     /// (only applies when GID is a portfolio):
     /// - `None` - Unlimited depth
     /// - `Some(0)` - Only direct child projects (not nested portfolios)
-    /// - `Some(n)` - Search n levels of nested portfolios (default: 3)
+    /// - `Some(n)` - Search n levels of nested portfolios
     ///
     /// Returns a flat `Vec<Task>`. Each task includes ALL projects it belongs to
     /// (not just the ones in the queried hierarchy). Use the `parent` field to
@@ -410,31 +387,28 @@ impl Client {
     /// let client = Client::from_env()?;
     ///
     /// // Get all tasks from a project (no subtasks)
-    /// let tasks = client.get_tasks_recursive("project_gid", Some(0), None).await?;
+    /// let tasks = client.tasks().recursive("project_gid", Some(0), None).await?;
     ///
     /// // Get all tasks from a portfolio with unlimited subtask depth
-    /// let tasks = client.get_tasks_recursive("portfolio_gid", None, None).await?;
+    /// let tasks = client.tasks().recursive("portfolio_gid", None, None).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_tasks_recursive(
+    pub async fn recursive(
         &self,
         gid: &str,
-        subtask_depth: Option<i32>,
-        portfolio_depth: Option<i32>,
+        subtask_depth: Option<usize>,
+        portfolio_depth: Option<usize>,
     ) -> Result<Vec<Task>, Error> {
-        // Default portfolio_depth to 0 (no expansion)
-        let portfolio_depth = portfolio_depth.unwrap_or(0);
-
         // Try to detect resource type by attempting to fetch as project first
-        match self.projects().get(gid).await {
+        match self.client.projects().get(gid).await {
             Ok(_) => {
                 // It's a project, get tasks from it
-                self.get_tasks_from_project(gid, subtask_depth).await
+                self.tasks_from_project(gid, subtask_depth).await
             }
             Err(Error::NotFound(_)) => {
                 // Not a project, try as portfolio
-                self.get_tasks_from_portfolio(gid, subtask_depth, portfolio_depth)
+                self.tasks_from_portfolio(gid, subtask_depth, portfolio_depth)
                     .await
             }
             Err(e) => Err(e),
@@ -442,37 +416,32 @@ impl Client {
     }
 
     /// Get tasks from a single project with optional subtask expansion.
-    async fn get_tasks_from_project(
+    async fn tasks_from_project(
         &self,
         project_gid: &str,
-        subtask_depth: Option<i32>,
+        subtask_depth: Option<usize>,
     ) -> Result<Vec<Task>, Error> {
-        let tasks = self.projects().tasks_full(project_gid).await?;
+        let tasks = self.client.projects().tasks_full(project_gid).await?;
         self.expand_subtasks_flat(tasks, subtask_depth, 0).await
     }
 
     /// Get tasks from all projects in a portfolio (recursively).
-    async fn get_tasks_from_portfolio(
+    async fn tasks_from_portfolio(
         &self,
         portfolio_gid: &str,
-        subtask_depth: Option<i32>,
-        portfolio_depth: i32,
+        subtask_depth: Option<usize>,
+        portfolio_depth: Option<usize>,
     ) -> Result<Vec<Task>, Error> {
-        // Convert portfolio_depth to Option<usize> for get_portfolio_recursive
-        let depth = if portfolio_depth < 0 {
-            None
-        } else {
-            Some(portfolio_depth as usize)
-        };
-        let portfolio = self.get_portfolio_recursive(portfolio_gid, depth).await?;
+        let portfolio = self
+            .client
+            .portfolios()
+            .recursive(portfolio_gid, portfolio_depth)
+            .await?;
         let project_gids = Self::collect_project_gids_from_portfolio(&portfolio);
 
         let mut all_tasks = Vec::new();
         for project_gid in project_gids {
-            match self
-                .get_tasks_from_project(&project_gid, subtask_depth)
-                .await
-            {
+            match self.tasks_from_project(&project_gid, subtask_depth).await {
                 Ok(tasks) => all_tasks.extend(tasks),
                 Err(Error::NotFound(_)) => continue, // Project may have been deleted
                 Err(e) => return Err(e),
@@ -498,23 +467,16 @@ impl Client {
     }
 
     /// Expand subtasks into a flat list.
-    fn expand_subtasks_flat<'a>(
-        &'a self,
+    fn expand_subtasks_flat<'b>(
+        &'b self,
         tasks: Vec<Task>,
-        subtask_depth: Option<i32>,
+        subtask_depth: Option<usize>,
         current_depth: usize,
-    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Task>, Error>> + Send + 'a>>
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<Vec<Task>, Error>> + Send + 'b>>
     {
         Box::pin(async move {
-            // Convert depth parameter
-            let max_depth = match subtask_depth {
-                Some(d) if d < 0 => None, // Unlimited
-                Some(d) => Some(d as usize),
-                None => None, // Default to unlimited
-            };
-
             // Check if we should fetch subtasks at this depth
-            let should_fetch_subtasks = match max_depth {
+            let should_fetch_subtasks = match subtask_depth {
                 None => true,
                 Some(max) => current_depth < max,
             };
@@ -526,7 +488,7 @@ impl Client {
                 all_tasks.push(task.clone());
 
                 if should_fetch_subtasks && has_subtasks {
-                    let subtasks = self.tasks().subtasks_full(&task.gid).await?;
+                    let subtasks = self.subtasks_full(&task.gid).await?;
                     let expanded = self
                         .expand_subtasks_flat(subtasks, subtask_depth, current_depth + 1)
                         .await?;
@@ -539,18 +501,38 @@ impl Client {
     }
 
     /// Get a task with full context including subtasks, dependencies, and comments.
-    pub async fn get_task_with_context(
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use asanaclient::Client;
+    /// # use asanaclient::api::tasks::TaskContextOptions;
+    /// # async fn example() -> Result<(), asanaclient::Error> {
+    /// let client = Client::from_env()?;
+    ///
+    /// // Get task with subtasks and comments
+    /// let ctx = client.tasks().with_context(
+    ///     "task123",
+    ///     TaskContextOptions::new().with_subtasks().with_comments()
+    /// ).await?;
+    ///
+    /// // Get task with all context
+    /// let ctx = client.tasks().with_context(
+    ///     "task123",
+    ///     TaskContextOptions::new().all()
+    /// ).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn with_context(
         &self,
         gid: &str,
-        include_subtasks: bool,
-        include_dependencies: bool,
-        include_comments: bool,
+        options: TaskContextOptions,
     ) -> Result<TaskWithContext, Error> {
-        let task = self.tasks().get_full(gid).await?;
+        let task = self.get_full(gid).await?;
 
-        let subtasks = if include_subtasks {
-            self.tasks()
-                .subtasks(gid)
+        let subtasks = if options.include_subtasks {
+            self.subtasks(gid)
                 .await?
                 .into_iter()
                 .map(|t| TaskRef {
@@ -563,16 +545,16 @@ impl Client {
             Vec::new()
         };
 
-        let (dependencies, dependents) = if include_dependencies {
-            let deps = self.tasks().dependencies(gid).await?;
-            let depts = self.tasks().dependents(gid).await?;
+        let (dependencies, dependents) = if options.include_dependencies {
+            let deps = self.dependencies(gid).await?;
+            let depts = self.dependents(gid).await?;
             (deps, depts)
         } else {
             (Vec::new(), Vec::new())
         };
 
-        let comments = if include_comments {
-            self.tasks().comments(gid).await?
+        let comments = if options.include_comments {
+            self.comments(gid).await?
         } else {
             Vec::new()
         };
@@ -584,6 +566,77 @@ impl Client {
             dependents,
             comments,
         })
+    }
+}
+
+/// A task with its related data expanded.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TaskWithContext {
+    /// The task details.
+    #[serde(flatten)]
+    pub task: Task,
+    /// Subtasks of this task.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subtasks: Vec<TaskRef>,
+    /// Tasks this task depends on (blockers).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dependencies: Vec<TaskDependency>,
+    /// Tasks that depend on this task.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub dependents: Vec<TaskDependency>,
+    /// Comments on this task.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub comments: Vec<Story>,
+}
+
+/// Options for what context to include when fetching a task.
+#[derive(Debug, Clone, Default)]
+pub struct TaskContextOptions {
+    /// Whether to include subtasks.
+    pub include_subtasks: bool,
+    /// Whether to include dependencies and dependents.
+    pub include_dependencies: bool,
+    /// Whether to include comments.
+    pub include_comments: bool,
+}
+
+impl TaskContextOptions {
+    /// Create new options with nothing included.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Include subtasks in the response.
+    pub fn with_subtasks(mut self) -> Self {
+        self.include_subtasks = true;
+        self
+    }
+
+    /// Include dependencies and dependents in the response.
+    pub fn with_dependencies(mut self) -> Self {
+        self.include_dependencies = true;
+        self
+    }
+
+    /// Include comments in the response.
+    pub fn with_comments(mut self) -> Self {
+        self.include_comments = true;
+        self
+    }
+
+    /// Include all context (subtasks, dependencies, and comments).
+    pub fn all(mut self) -> Self {
+        self.include_subtasks = true;
+        self.include_dependencies = true;
+        self.include_comments = true;
+        self
+    }
+}
+
+impl Client {
+    /// Access the tasks API.
+    pub fn tasks(&self) -> TasksApi<'_> {
+        TasksApi::new(self)
     }
 }
 
@@ -983,13 +1036,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn test_remove_follower() {
+    async fn test_remove_followers() {
         let server = MockServer::start().await;
 
         Mock::given(method("POST"))
             .and(path("/tasks/task123/removeFollowers"))
             .and(body_json(serde_json::json!({
-                "data": {"followers": ["user1"]}
+                "data": {"followers": ["user1", "user2"]}
             })))
             .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
                 "data": {}
@@ -998,7 +1051,10 @@ mod tests {
             .await;
 
         let client = test_client(&server);
-        let result = client.tasks().remove_follower("task123", "user1").await;
+        let result = client
+            .tasks()
+            .remove_followers("task123", &["user1", "user2"])
+            .await;
 
         assert!(result.is_ok());
     }

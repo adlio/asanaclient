@@ -21,7 +21,7 @@ pub use sections::SectionsApi;
 pub use status_updates::StatusUpdatesApi;
 pub use stories::StoriesApi;
 pub use tags::TagsApi;
-pub use tasks::{TaskWithContext, TasksApi};
+pub use tasks::{TaskContextOptions, TaskWithContext, TasksApi};
 pub use templates::TemplatesApi;
 pub use users::UsersApi;
 pub use workspaces::WorkspacesApi;

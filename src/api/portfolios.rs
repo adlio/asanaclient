@@ -170,6 +170,89 @@ impl<'a> PortfoliosApi<'a> {
         };
         self.client.post_empty(&path, &request).await
     }
+
+    /// Get a portfolio with its items recursively expanded.
+    ///
+    /// The `max_depth` parameter controls how many levels of children to include:
+    /// - `None` - Unlimited depth (expand all nested portfolios)
+    /// - `Some(0)` - Just the portfolio metadata, no items
+    /// - `Some(1)` - Portfolio + immediate children only
+    /// - `Some(2)` - Portfolio + children + grandchildren
+    /// - etc.
+    ///
+    /// Note: Tasks are never included. Use `projects().tasks()` separately if needed.
+    ///
+    /// # Example
+    ///
+    /// ```rust,no_run
+    /// # use asanaclient::Client;
+    /// # async fn example() -> Result<(), asanaclient::Error> {
+    /// let client = Client::from_env()?;
+    ///
+    /// // Get portfolio with all nested items
+    /// let portfolio = client.portfolios().recursive("port123", None).await?;
+    ///
+    /// // Get portfolio with only direct children
+    /// let portfolio = client.portfolios().recursive("port123", Some(1)).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn recursive(
+        &self,
+        gid: &str,
+        max_depth: Option<usize>,
+    ) -> Result<PortfolioWithItems, Error> {
+        self.fetch_with_depth(gid, max_depth, 0).await
+    }
+
+    /// Internal recursive helper for fetching portfolios.
+    fn fetch_with_depth<'b>(
+        &'b self,
+        gid: &'b str,
+        max_depth: Option<usize>,
+        current_depth: usize,
+    ) -> std::pin::Pin<
+        Box<dyn std::future::Future<Output = Result<PortfolioWithItems, Error>> + Send + 'b>,
+    > {
+        Box::pin(async move {
+            let portfolio = self.get(gid).await?;
+
+            // Check if we should fetch items at this depth
+            let should_fetch_items = match max_depth {
+                None => true,                     // Unlimited depth
+                Some(max) => current_depth < max, // Only if we haven't reached max
+            };
+
+            if !should_fetch_items {
+                return Ok(PortfolioWithItems {
+                    portfolio,
+                    items: Vec::new(),
+                });
+            }
+
+            let item_refs = self.items(gid).await?;
+            let mut items = Vec::new();
+
+            for item_ref in item_refs {
+                let expanded = match item_ref.resource_type.as_str() {
+                    "project" => {
+                        let project = self.client.projects().get_full(&item_ref.gid).await?;
+                        PortfolioItemExpanded::Project(Box::new(project))
+                    }
+                    "portfolio" => {
+                        let nested = self
+                            .fetch_with_depth(&item_ref.gid, max_depth, current_depth + 1)
+                            .await?;
+                        PortfolioItemExpanded::Portfolio(Box::new(nested))
+                    }
+                    _ => continue, // Unknown type, skip
+                };
+                items.push(expanded);
+            }
+
+            Ok(PortfolioWithItems { portfolio, items })
+        })
+    }
 }
 
 /// A portfolio with its nested items expanded.
@@ -196,73 +279,6 @@ impl Client {
     /// Access the portfolios API.
     pub fn portfolios(&self) -> PortfoliosApi<'_> {
         PortfoliosApi::new(self)
-    }
-
-    /// Get a portfolio with its items recursively expanded.
-    ///
-    /// The `max_depth` parameter controls how many levels of children to include:
-    /// - `None` - Unlimited depth (expand all nested portfolios)
-    /// - `Some(0)` - Just the portfolio metadata, no items
-    /// - `Some(1)` - Portfolio + immediate children only
-    /// - `Some(2)` - Portfolio + children + grandchildren
-    /// - etc.
-    ///
-    /// Note: Tasks are never included. Use `projects().tasks()` separately if needed.
-    pub async fn get_portfolio_recursive(
-        &self,
-        gid: &str,
-        max_depth: Option<usize>,
-    ) -> Result<PortfolioWithItems, Error> {
-        self.fetch_portfolio_with_depth(gid, max_depth, 0).await
-    }
-
-    /// Internal recursive helper for fetching portfolios.
-    fn fetch_portfolio_with_depth<'a>(
-        &'a self,
-        gid: &'a str,
-        max_depth: Option<usize>,
-        current_depth: usize,
-    ) -> std::pin::Pin<
-        Box<dyn std::future::Future<Output = Result<PortfolioWithItems, Error>> + Send + 'a>,
-    > {
-        Box::pin(async move {
-            let portfolio = self.portfolios().get(gid).await?;
-
-            // Check if we should fetch items at this depth
-            let should_fetch_items = match max_depth {
-                None => true,                     // Unlimited depth
-                Some(max) => current_depth < max, // Only if we haven't reached max
-            };
-
-            if !should_fetch_items {
-                return Ok(PortfolioWithItems {
-                    portfolio,
-                    items: Vec::new(),
-                });
-            }
-
-            let item_refs = self.portfolios().items(gid).await?;
-            let mut items = Vec::new();
-
-            for item_ref in item_refs {
-                let expanded = match item_ref.resource_type.as_str() {
-                    "project" => {
-                        let project = self.projects().get_full(&item_ref.gid).await?;
-                        PortfolioItemExpanded::Project(Box::new(project))
-                    }
-                    "portfolio" => {
-                        let nested = self
-                            .fetch_portfolio_with_depth(&item_ref.gid, max_depth, current_depth + 1)
-                            .await?;
-                        PortfolioItemExpanded::Portfolio(Box::new(nested))
-                    }
-                    _ => continue, // Unknown type, skip
-                };
-                items.push(expanded);
-            }
-
-            Ok(PortfolioWithItems { portfolio, items })
-        })
     }
 }
 

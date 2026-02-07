@@ -49,6 +49,73 @@ pub struct CreateTaskData {
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
 }
 
+impl CreateTaskData {
+    /// Create a new empty CreateTaskData.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the task name.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set the workspace.
+    pub fn workspace(mut self, workspace: impl Into<String>) -> Self {
+        self.workspace = Some(workspace.into());
+        self
+    }
+
+    /// Set the projects.
+    pub fn projects(mut self, projects: Vec<String>) -> Self {
+        self.projects = Some(projects);
+        self
+    }
+
+    /// Set the assignee.
+    pub fn assignee(mut self, assignee: impl Into<String>) -> Self {
+        self.assignee = Some(assignee.into());
+        self
+    }
+
+    /// Set the due date (YYYY-MM-DD format).
+    pub fn due_on(mut self, due_on: impl Into<String>) -> Self {
+        self.due_on = Some(due_on.into());
+        self
+    }
+
+    /// Set the start date (YYYY-MM-DD format).
+    pub fn start_on(mut self, start_on: impl Into<String>) -> Self {
+        self.start_on = Some(start_on.into());
+        self
+    }
+
+    /// Set the plain text notes.
+    pub fn notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Set the HTML notes.
+    pub fn html_notes(mut self, html_notes: impl Into<String>) -> Self {
+        self.html_notes = Some(html_notes.into());
+        self
+    }
+
+    /// Set the completed status.
+    pub fn completed(mut self, completed: bool) -> Self {
+        self.completed = Some(completed);
+        self
+    }
+
+    /// Set custom field values.
+    pub fn custom_fields(mut self, custom_fields: HashMap<String, serde_json::Value>) -> Self {
+        self.custom_fields = Some(custom_fields);
+        self
+    }
+}
+
 /// Request body for updating a task.
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateTaskRequest {
@@ -83,6 +150,61 @@ pub struct UpdateTaskData {
     /// Custom field values (field GID -> value).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
+}
+
+impl UpdateTaskData {
+    /// Create a new empty UpdateTaskData.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the task name.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set the assignee.
+    pub fn assignee(mut self, assignee: impl Into<String>) -> Self {
+        self.assignee = Some(assignee.into());
+        self
+    }
+
+    /// Set the due date (YYYY-MM-DD format).
+    pub fn due_on(mut self, due_on: impl Into<String>) -> Self {
+        self.due_on = Some(due_on.into());
+        self
+    }
+
+    /// Set the start date (YYYY-MM-DD format).
+    pub fn start_on(mut self, start_on: impl Into<String>) -> Self {
+        self.start_on = Some(start_on.into());
+        self
+    }
+
+    /// Set the plain text notes.
+    pub fn notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Set the HTML notes.
+    pub fn html_notes(mut self, html_notes: impl Into<String>) -> Self {
+        self.html_notes = Some(html_notes.into());
+        self
+    }
+
+    /// Set the completed status.
+    pub fn completed(mut self, completed: bool) -> Self {
+        self.completed = Some(completed);
+        self
+    }
+
+    /// Set custom field values.
+    pub fn custom_fields(mut self, custom_fields: HashMap<String, serde_json::Value>) -> Self {
+        self.custom_fields = Some(custom_fields);
+        self
+    }
 }
 
 /// Request body for adding a task to a project.
@@ -240,16 +362,16 @@ pub struct AddFollowersData {
     pub followers: Vec<String>,
 }
 
-/// Request body for removing a follower from a task.
+/// Request body for removing followers from a task.
 #[derive(Debug, Clone, Serialize)]
-pub struct RemoveFollowerRequest {
+pub struct RemoveFollowersRequest {
     /// The data.
-    pub data: RemoveFollowerData,
+    pub data: RemoveFollowersData,
 }
 
-/// Data for removing a follower from a task.
+/// Data for removing followers from a task.
 #[derive(Debug, Clone, Serialize)]
-pub struct RemoveFollowerData {
+pub struct RemoveFollowersData {
     /// The GIDs of users to remove as followers.
     pub followers: Vec<String>,
 }
@@ -299,6 +421,70 @@ pub struct CreateProjectData {
     pub privacy_setting: Option<String>,
 }
 
+impl CreateProjectData {
+    /// Create a new CreateProjectData with a name.
+    pub fn new(name: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Set the workspace.
+    pub fn workspace(mut self, workspace: impl Into<String>) -> Self {
+        self.workspace = Some(workspace.into());
+        self
+    }
+
+    /// Set the team.
+    pub fn team(mut self, team: impl Into<String>) -> Self {
+        self.team = Some(team.into());
+        self
+    }
+
+    /// Set the color.
+    pub fn color(mut self, color: impl Into<String>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    /// Set the plain text notes.
+    pub fn notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Set the HTML notes.
+    pub fn html_notes(mut self, html_notes: impl Into<String>) -> Self {
+        self.html_notes = Some(html_notes.into());
+        self
+    }
+
+    /// Set the due date (YYYY-MM-DD format).
+    pub fn due_on(mut self, due_on: impl Into<String>) -> Self {
+        self.due_on = Some(due_on.into());
+        self
+    }
+
+    /// Set the start date (YYYY-MM-DD format).
+    pub fn start_on(mut self, start_on: impl Into<String>) -> Self {
+        self.start_on = Some(start_on.into());
+        self
+    }
+
+    /// Set the default view.
+    pub fn default_view(mut self, default_view: impl Into<String>) -> Self {
+        self.default_view = Some(default_view.into());
+        self
+    }
+
+    /// Set the privacy setting.
+    pub fn privacy_setting(mut self, privacy_setting: impl Into<String>) -> Self {
+        self.privacy_setting = Some(privacy_setting.into());
+        self
+    }
+}
+
 /// Request body for updating a project.
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdateProjectRequest {
@@ -336,6 +522,67 @@ pub struct UpdateProjectData {
     /// Custom field values (field GID -> value).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub custom_fields: Option<HashMap<String, serde_json::Value>>,
+}
+
+impl UpdateProjectData {
+    /// Create a new empty UpdateProjectData.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the project name.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set the color.
+    pub fn color(mut self, color: impl Into<String>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    /// Set the plain text notes.
+    pub fn notes(mut self, notes: impl Into<String>) -> Self {
+        self.notes = Some(notes.into());
+        self
+    }
+
+    /// Set the HTML notes.
+    pub fn html_notes(mut self, html_notes: impl Into<String>) -> Self {
+        self.html_notes = Some(html_notes.into());
+        self
+    }
+
+    /// Set the due date (YYYY-MM-DD format).
+    pub fn due_on(mut self, due_on: impl Into<String>) -> Self {
+        self.due_on = Some(due_on.into());
+        self
+    }
+
+    /// Set the start date (YYYY-MM-DD format).
+    pub fn start_on(mut self, start_on: impl Into<String>) -> Self {
+        self.start_on = Some(start_on.into());
+        self
+    }
+
+    /// Set the archived status.
+    pub fn archived(mut self, archived: bool) -> Self {
+        self.archived = Some(archived);
+        self
+    }
+
+    /// Set the privacy setting.
+    pub fn privacy_setting(mut self, privacy_setting: impl Into<String>) -> Self {
+        self.privacy_setting = Some(privacy_setting.into());
+        self
+    }
+
+    /// Set custom field values.
+    pub fn custom_fields(mut self, custom_fields: HashMap<String, serde_json::Value>) -> Self {
+        self.custom_fields = Some(custom_fields);
+        self
+    }
 }
 
 /// Request body for instantiating a project from a template.
@@ -436,6 +683,29 @@ pub struct CreatePortfolioData {
     pub public: Option<bool>,
 }
 
+impl CreatePortfolioData {
+    /// Create a new CreatePortfolioData with name and workspace.
+    pub fn new(name: impl Into<String>, workspace: impl Into<String>) -> Self {
+        Self {
+            name: name.into(),
+            workspace: workspace.into(),
+            ..Default::default()
+        }
+    }
+
+    /// Set the color.
+    pub fn color(mut self, color: impl Into<String>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    /// Set the public visibility.
+    pub fn public(mut self, public: bool) -> Self {
+        self.public = Some(public);
+        self
+    }
+}
+
 /// Request body for updating a portfolio.
 #[derive(Debug, Clone, Serialize)]
 pub struct UpdatePortfolioRequest {
@@ -455,6 +725,31 @@ pub struct UpdatePortfolioData {
     /// Whether the portfolio is public.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub public: Option<bool>,
+}
+
+impl UpdatePortfolioData {
+    /// Create a new empty UpdatePortfolioData.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Set the portfolio name.
+    pub fn name(mut self, name: impl Into<String>) -> Self {
+        self.name = Some(name.into());
+        self
+    }
+
+    /// Set the color.
+    pub fn color(mut self, color: impl Into<String>) -> Self {
+        self.color = Some(color.into());
+        self
+    }
+
+    /// Set the public visibility.
+    pub fn public(mut self, public: bool) -> Self {
+        self.public = Some(public);
+        self
+    }
 }
 
 /// Request body for adding an item to a portfolio.

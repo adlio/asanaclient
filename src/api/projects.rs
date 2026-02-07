@@ -3,7 +3,7 @@
 use crate::types::requests::{
     AddFollowersData, AddFollowersRequest, AddMembersData, AddMembersRequest, CreateProjectData,
     CreateProjectRequest, InstantiateProjectData, InstantiateProjectRequest, Job,
-    RemoveFollowerData, RemoveFollowerRequest, RemoveMembersData, RemoveMembersRequest,
+    RemoveFollowersData, RemoveFollowersRequest, RemoveMembersData, RemoveMembersRequest,
     UpdateProjectData, UpdateProjectRequest,
 };
 use crate::types::{Project, StatusUpdate, Task};
@@ -197,8 +197,8 @@ impl<'a> ProjectsApi<'a> {
         follower_gids: &[&str],
     ) -> Result<(), Error> {
         let path = format!("/projects/{}/removeFollowers", project_gid);
-        let request = RemoveFollowerRequest {
-            data: RemoveFollowerData {
+        let request = RemoveFollowersRequest {
+            data: RemoveFollowersData {
                 followers: follower_gids.iter().map(|s| s.to_string()).collect(),
             },
         };
