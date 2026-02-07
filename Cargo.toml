@@ -1,39 +1,24 @@
-[workspace]
-members = ["asanaclient", "asanaclient-mcp"]
-resolver = "2"
-
-[workspace.package]
+[package]
+name = "asanaclient"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
 repository = "https://github.com/adlio/asanaclient"
+description = "Rust SDK for the Asana API"
+documentation = "https://docs.rs/asanaclient"
+readme = "README.md"
+keywords = ["asana", "api", "sdk", "tasks", "projects"]
+categories = ["api-bindings", "asynchronous"]
 
-[workspace.dependencies]
-# Internal crates
-asanaclient = { version = "0.1.0", path = "./asanaclient" }
-
-# Async runtime
+[dependencies]
 tokio = { version = "1.43", features = ["full"] }
-async-trait = "0.1"
-
-# Serialization
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-schemars = "0.8"
-
-# Error handling
 thiserror = "2.0"
-
-# HTTP
-reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json"] }
-
-# MCP
-rmcp = { version = "0.11", features = ["server", "transport-io"] }
-
-# Utilities
 url = "2.5"
 
-# Testing
+[dev-dependencies]
 tokio-test = "0.4"
 wiremock = "0.6"
 cargo-husky = { version = "1", default-features = false, features = ["user-hooks"] }

@@ -141,6 +141,83 @@ impl Client {
         Ok(all_items)
     }
 
+    /// Make a POST request to create a resource and deserialize the response.
+    ///
+    /// The `path` should be the API endpoint path without the base URL.
+    /// The `body` will be serialized as JSON in the request body.
+    pub async fn post<T, B>(&self, path: &str, body: &B) -> Result<T, Error>
+    where
+        T: DeserializeOwned,
+        B: serde::Serialize,
+    {
+        let url = format!("{}{}", self.base_url, path);
+
+        let response = self.http.post(&url).json(body).send().await?;
+
+        self.handle_response::<DataWrapper<T>>(response)
+            .await
+            .map(|wrapper| wrapper.data)
+    }
+
+    /// Make a PUT request to update a resource and deserialize the response.
+    ///
+    /// The `path` should be the API endpoint path without the base URL.
+    /// The `body` will be serialized as JSON in the request body.
+    pub async fn put<T, B>(&self, path: &str, body: &B) -> Result<T, Error>
+    where
+        T: DeserializeOwned,
+        B: serde::Serialize,
+    {
+        let url = format!("{}{}", self.base_url, path);
+
+        let response = self.http.put(&url).json(body).send().await?;
+
+        self.handle_response::<DataWrapper<T>>(response)
+            .await
+            .map(|wrapper| wrapper.data)
+    }
+
+    /// Make a POST request that expects no response body (e.g., relationship operations).
+    ///
+    /// The `path` should be the API endpoint path without the base URL.
+    /// The `body` will be serialized as JSON in the request body.
+    pub async fn post_empty<B>(&self, path: &str, body: &B) -> Result<(), Error>
+    where
+        B: serde::Serialize,
+    {
+        let url = format!("{}{}", self.base_url, path);
+
+        let response = self.http.post(&url).json(body).send().await?;
+
+        self.handle_empty_response(response).await
+    }
+
+    /// Make a DELETE request to remove a resource or relationship.
+    ///
+    /// The `path` should be the API endpoint path without the base URL.
+    pub async fn delete(&self, path: &str) -> Result<(), Error> {
+        let url = format!("{}{}", self.base_url, path);
+
+        let response = self.http.delete(&url).send().await?;
+
+        self.handle_empty_response(response).await
+    }
+
+    /// Make a DELETE request with a body (for bulk operations).
+    ///
+    /// The `path` should be the API endpoint path without the base URL.
+    /// The `body` will be serialized as JSON in the request body.
+    pub async fn delete_with_body<B>(&self, path: &str, body: &B) -> Result<(), Error>
+    where
+        B: serde::Serialize,
+    {
+        let url = format!("{}{}", self.base_url, path);
+
+        let response = self.http.delete(&url).json(body).send().await?;
+
+        self.handle_empty_response(response).await
+    }
+
     /// Handle an API response, converting errors as appropriate.
     async fn handle_response<T>(&self, response: reqwest::Response) -> Result<T, Error>
     where
@@ -151,10 +228,29 @@ impl Client {
         if status.is_success() {
             let body = response.text().await?;
             serde_json::from_str(&body).map_err(Error::Parse)
-        } else if status == reqwest::StatusCode::NOT_FOUND {
-            Err(Error::NotFound("resource not found".to_string()))
         } else {
-            // Try to extract error message from response body
+            Err(self.error_from_response(response).await)
+        }
+    }
+
+    /// Handle an API response that should have no body.
+    async fn handle_empty_response(&self, response: reqwest::Response) -> Result<(), Error> {
+        let status = response.status();
+
+        if status.is_success() {
+            Ok(())
+        } else {
+            Err(self.error_from_response(response).await)
+        }
+    }
+
+    /// Convert an error response to an Error.
+    async fn error_from_response(&self, response: reqwest::Response) -> Error {
+        let status = response.status();
+
+        if status == reqwest::StatusCode::NOT_FOUND {
+            Error::NotFound("resource not found".to_string())
+        } else {
             let body = response.text().await.unwrap_or_default();
             let message = extract_error_message(&body).unwrap_or_else(|| {
                 format!(
@@ -163,7 +259,7 @@ impl Client {
                     status.canonical_reason().unwrap_or("")
                 )
             });
-            Err(Error::Api { message })
+            Error::Api { message }
         }
     }
 }
@@ -456,6 +552,237 @@ mod tests {
             .unwrap();
 
         assert_eq!(items.len(), 2);
+    }
+
+    // ========== post() tests ==========
+
+    #[tokio::test]
+    async fn test_post_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/items"))
+            .respond_with(ResponseTemplate::new(201).set_body_json(serde_json::json!({
+                "data": {"gid": "new123", "name": "Created Item"}
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+
+        #[derive(Serialize)]
+        struct CreateRequest {
+            data: CreateData,
+        }
+        #[derive(Serialize)]
+        struct CreateData {
+            name: String,
+        }
+
+        let body = CreateRequest {
+            data: CreateData {
+                name: "Created Item".to_string(),
+            },
+        };
+
+        let item: TestItem = client.post("/items", &body).await.unwrap();
+
+        assert_eq!(item.gid, "new123");
+        assert_eq!(item.name, "Created Item");
+    }
+
+    #[tokio::test]
+    async fn test_post_api_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/items"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "errors": [{"message": "Invalid request data"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {}});
+
+        let result: Result<TestItem, Error> = client.post("/items", &body).await;
+
+        match result {
+            Err(Error::Api { message }) => assert_eq!(message, "Invalid request data"),
+            _ => panic!("Expected Api error"),
+        }
+    }
+
+    // ========== put() tests ==========
+
+    #[tokio::test]
+    async fn test_put_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("PUT"))
+            .and(path("/items/123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {"gid": "123", "name": "Updated Item"}
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {"name": "Updated Item"}});
+
+        let item: TestItem = client.put("/items/123", &body).await.unwrap();
+
+        assert_eq!(item.gid, "123");
+        assert_eq!(item.name, "Updated Item");
+    }
+
+    #[tokio::test]
+    async fn test_put_not_found() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("PUT"))
+            .and(path("/items/missing"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {}});
+
+        let result: Result<TestItem, Error> = client.put("/items/missing", &body).await;
+
+        assert!(matches!(result, Err(Error::NotFound(_))));
+    }
+
+    // ========== post_empty() tests ==========
+
+    #[tokio::test]
+    async fn test_post_empty_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/tasks/123/addProject"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {}
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {"project": "proj456"}});
+
+        let result = client.post_empty("/tasks/123/addProject", &body).await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_post_empty_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/tasks/123/addProject"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errors": [{"message": "Not authorized to add to project"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {"project": "proj456"}});
+
+        let result = client.post_empty("/tasks/123/addProject", &body).await;
+
+        match result {
+            Err(Error::Api { message }) => assert_eq!(message, "Not authorized to add to project"),
+            _ => panic!("Expected Api error"),
+        }
+    }
+
+    // ========== delete() tests ==========
+
+    #[tokio::test]
+    async fn test_delete_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/items/123"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {}
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let result = client.delete("/items/123").await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_not_found() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/items/missing"))
+            .respond_with(ResponseTemplate::new(404))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let result = client.delete("/items/missing").await;
+
+        assert!(matches!(result, Err(Error::NotFound(_))));
+    }
+
+    // ========== delete_with_body() tests ==========
+
+    #[tokio::test]
+    async fn test_delete_with_body_success() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/tasks/123/removeDependencies"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": {}
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {"dependencies": ["dep1", "dep2"]}});
+
+        let result = client
+            .delete_with_body("/tasks/123/removeDependencies", &body)
+            .await;
+
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_delete_with_body_error() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("DELETE"))
+            .and(path("/tasks/123/removeDependencies"))
+            .respond_with(ResponseTemplate::new(400).set_body_json(serde_json::json!({
+                "errors": [{"message": "Invalid dependencies"}]
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server);
+        let body = serde_json::json!({"data": {"dependencies": []}});
+
+        let result = client
+            .delete_with_body("/tasks/123/removeDependencies", &body)
+            .await;
+
+        match result {
+            Err(Error::Api { message }) => assert_eq!(message, "Invalid dependencies"),
+            _ => panic!("Expected Api error"),
+        }
     }
 
     // ========== extract_error_message tests ==========

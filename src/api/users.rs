@@ -50,12 +50,14 @@ impl<'a> UsersApi<'a> {
     /// # }
     /// ```
     pub async fn favorites(&self, workspace_gid: &str) -> Result<Vec<FavoriteItem>, Error> {
-        let path = "/users/me/favorites";
-        let query = [
-            ("workspace", workspace_gid),
-            ("resource_type", "project,portfolio"),
-        ];
-        self.client.get_all(path, &query).await
+        let (projects, portfolios) = tokio::try_join!(
+            self.favorite_projects(workspace_gid),
+            self.favorite_portfolios(workspace_gid)
+        )?;
+
+        let mut all = projects;
+        all.extend(portfolios);
+        Ok(all)
     }
 
     /// Get only favorited projects for the current user in a workspace.

@@ -38,13 +38,14 @@ pub use error::Error;
 
 // Re-export commonly used API types.
 pub use api::{
-    FavoritesData, FetchFavoritesOptions, PortfolioWithItems, ProjectWithContext, TaskWithContext,
+    FavoritesData, FetchFavoritesOptions, PortfolioWithItems, ProjectWithContext, SectionsApi,
+    StatusUpdatesApi, StoriesApi, TagsApi, TaskWithContext, TemplatesApi,
 };
 
 // Re-export core data types.
 pub use types::{
-    CustomFieldValue, FavoriteItem, Gid, Portfolio, Project, ResourceRef, StatusColor, Story, Task,
-    User, Workspace,
+    CustomFieldValue, FavoriteItem, Gid, Job, Portfolio, Project, ProjectTemplate, ResourceRef,
+    Section, StatusColor, Story, Tag, Task, User, Workspace,
 };
 
 /// Result type alias using the crate's error type.

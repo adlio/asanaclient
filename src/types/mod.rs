@@ -4,9 +4,13 @@ pub mod common;
 pub mod custom_field;
 pub mod portfolio;
 pub mod project;
+pub mod requests;
+pub mod section;
 pub mod status_update;
 pub mod story;
+pub mod tag;
 pub mod task;
+pub mod template;
 pub mod user;
 pub mod workspace;
 
@@ -18,8 +22,12 @@ pub use custom_field::{
 };
 pub use portfolio::{Portfolio, PortfolioItem, PortfolioItemRef};
 pub use project::Project;
+pub use requests::Job;
+pub use section::Section;
 pub use status_update::{StatusUpdate, StatusUpdateRef};
 pub use story::{Story, StoryType};
+pub use tag::Tag;
 pub use task::{Task, TaskDependency, TaskMembership, TaskRef};
+pub use template::{ProjectTemplate, RequestedDate, RequestedRole};
 pub use user::{FavoriteItem, User, UserPhoto};
 pub use workspace::Workspace;

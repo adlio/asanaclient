@@ -26,7 +26,7 @@ impl Default for FetchFavoritesOptions {
         Self {
             include_projects: true,
             include_portfolios: true,
-            portfolio_depth: 3,
+            portfolio_depth: 0,
             include_project_tasks: false,
             status_extraction: None,
         }
@@ -203,7 +203,7 @@ mod tests {
         let opts = FetchFavoritesOptions::new();
         assert!(opts.include_projects);
         assert!(opts.include_portfolios);
-        assert_eq!(opts.portfolio_depth, 3);
+        assert_eq!(opts.portfolio_depth, 0);
         assert!(!opts.include_project_tasks);
     }
 

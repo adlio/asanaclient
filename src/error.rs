@@ -31,4 +31,11 @@ pub enum Error {
     /// A resource was not found.
     #[error("resource not found: {0}")]
     NotFound(String),
+
+    /// A validation error (missing required fields, invalid values, etc.).
+    #[error("validation error: {message}")]
+    Validation {
+        /// The validation error message.
+        message: String,
+    },
 }
