@@ -9,6 +9,7 @@ documentation = "https://docs.rs/asanaclient"
 readme = "README.md"
 keywords = ["asana", "api", "sdk", "tasks", "projects"]
 categories = ["api-bindings", "asynchronous"]
+exclude = ["docs/", "tmp/", ".cargo-husky/", ".claude/", ".github/", "AGENTS.md"]
 
 [dependencies]
 tokio = { version = "1.43", features = ["full"] }

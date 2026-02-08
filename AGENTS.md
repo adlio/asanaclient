@@ -16,16 +16,40 @@ experience for Rust developers integrating with Asana.
 
 ```
 asanaclient/
-├── Cargo.toml                      # Crate manifest
-├── Makefile                        # Build automation
+├── Cargo.toml                          # Crate manifest
+├── Makefile                            # Build automation
 ├── src/
-│   ├── lib.rs                      # Public API exports
-│   ├── client.rs                   # HTTP client with fluent API
-│   ├── error.rs                    # Error types
-│   ├── api/                        # API facades (tasks.rs, projects.rs, etc.)
-│   └── types/                      # Response types (task.rs, project.rs, etc.)
+│   ├── lib.rs                          # Public API exports
+│   ├── client.rs                       # HTTP client with pagination support
+│   ├── error.rs                        # Error types
+│   ├── api/                            # API facades
+│   │   ├── favorites.rs                # Cross-resource favorites aggregation
+│   │   ├── portfolios.rs               # Portfolio operations (recursive expansion)
+│   │   ├── projects.rs                 # Project CRUD and search
+│   │   ├── sections.rs                 # Section operations
+│   │   ├── status_updates.rs           # Status update retrieval
+│   │   ├── stories.rs                  # Story/comment operations
+│   │   ├── tags.rs                     # Tag CRUD
+│   │   ├── tasks.rs                    # Task CRUD, subtasks, dependencies, comments
+│   │   ├── templates.rs                # Project template operations
+│   │   ├── users.rs                    # User retrieval
+│   │   └── workspaces.rs              # Workspace listing
+│   └── types/                          # Response/request types
+│       ├── common.rs                   # Shared types (Gid, ResourceRef, etc.)
+│       ├── custom_field.rs             # Custom field value types
+│       ├── portfolio.rs                # Portfolio types
+│       ├── project.rs                  # Project types
+│       ├── requests.rs                 # Request body types for write operations
+│       ├── section.rs                  # Section types
+│       ├── status_update.rs            # Status update types
+│       ├── story.rs                    # Story/comment types
+│       ├── tag.rs                      # Tag types
+│       ├── task.rs                     # Task types
+│       ├── template.rs                 # Template types
+│       ├── user.rs                     # User types
+│       └── workspace.rs               # Workspace types
 └── docs/
-    └── asana_oas.yaml              # Asana OpenAPI spec (reference)
+    └── asana_oas.yaml                  # Asana OpenAPI spec (reference)
 ```
 
 ## Code Quality
@@ -50,7 +74,7 @@ This checks formatting, linting (clippy warnings are errors), builds, docs, and 
 2. Export from `types/mod.rs`
 3. Create API module in `api/` (copy pattern from existing APIs)
 4. Export from `api/mod.rs`
-5. Add accessor method to `Client` in `client.rs`
+5. Add accessor method to `Client` in the API module file (see bottom of any existing API file)
 6. Re-export from `lib.rs` if it's a commonly-used type
 7. Run `make ci`
 
