@@ -44,8 +44,8 @@ pub use api::{
 
 // Re-export core data types.
 pub use types::{
-    CustomFieldValue, FavoriteItem, Gid, Job, Portfolio, Project, ProjectTemplate, ResourceRef,
-    Section, StatusColor, Story, Tag, Task, User, Workspace,
+    CustomFieldValue, EnumOption, FavoriteItem, Gid, Job, Portfolio, Project, ProjectTemplate,
+    ResourceRef, Section, StatusColor, Story, Tag, Task, User, Workspace,
 };
 
 /// Result type alias using the crate's error type.

@@ -56,7 +56,8 @@ pub struct EnumOption {
     /// The unique identifier for the option.
     pub gid: Gid,
     /// The display name of the option.
-    pub name: String,
+    #[serde(default)]
+    pub name: Option<String>,
     /// Whether this option is enabled.
     #[serde(default = "default_true")]
     pub enabled: bool,
@@ -195,7 +196,7 @@ fn extract_from_field(field: &CustomFieldValue) -> Option<ExtractedStatus> {
             let value = field
                 .enum_value
                 .as_ref()
-                .map(|e| e.name.clone())
+                .and_then(|e| e.name.clone())
                 .or_else(|| field.display_value.clone());
             let color = field.enum_value.as_ref().and_then(|e| e.color.clone());
             let status_color = map_color_to_status(&color, &value);
@@ -289,6 +290,26 @@ mod tests {
     }
 
     #[test]
+    fn test_deserialize_enum_option_without_name() {
+        let json = r#"{
+            "gid": "456",
+            "name": "Status",
+            "resource_subtype": "enum",
+            "display_value": "On Track",
+            "enum_value": {
+                "gid": "789",
+                "enabled": true,
+                "color": "green"
+            }
+        }"#;
+        let value: CustomFieldValue = serde_json::from_str(json).unwrap();
+        let ev = value.enum_value.unwrap();
+        assert_eq!(ev.gid, "789");
+        assert_eq!(ev.name, None);
+        assert!(ev.enabled);
+    }
+
+    #[test]
     fn test_deserialize_custom_field_value() {
         let json = r#"{
             "gid": "456",
@@ -320,7 +341,7 @@ mod tests {
                 number_value: None,
                 enum_value: Some(EnumOption {
                     gid: "e1".to_string(),
-                    name: "High".to_string(),
+                    name: Some("High".to_string()),
                     enabled: true,
                     color: Some("red".to_string()),
                 }),
@@ -336,7 +357,7 @@ mod tests {
                 number_value: None,
                 enum_value: Some(EnumOption {
                     gid: "e2".to_string(),
-                    name: "On Track".to_string(),
+                    name: Some("On Track".to_string()),
                     enabled: true,
                     color: Some("green".to_string()),
                 }),
@@ -362,7 +383,7 @@ mod tests {
             number_value: None,
             enum_value: Some(EnumOption {
                 gid: "e1".to_string(),
-                name: "At Risk".to_string(),
+                name: Some("At Risk".to_string()),
                 enabled: true,
                 color: Some("yellow".to_string()),
             }),
