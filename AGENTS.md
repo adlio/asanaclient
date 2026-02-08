@@ -4,9 +4,11 @@ This document provides guidance for AI coding assistants working in this reposit
 
 ## Project Overview
 
-This is a Rust SDK providing a strongly-typed client for the Asana API. The goal is to provide a top-notch developer experience for Rust developers integrating with Asana.
+This is a Rust SDK providing a strongly-typed client for the Asana API. The goal is to provide a top-notch developer
+experience for Rust developers integrating with Asana.
 
 **Key URLs:**
+
 - Asana API Reference: https://developers.asana.com/reference/rest-api-reference
 - Rust API Guidelines: https://rust-lang.github.io/api-guidelines/
 
@@ -37,6 +39,7 @@ make ci
 This checks formatting, linting (clippy warnings are errors), builds, docs, and tests.
 
 **Rules:**
+
 - Never use `anyhow` in library code - use `thiserror`
 - All clippy warnings must be fixed
 - Write tests for new functionality
@@ -53,8 +56,8 @@ This checks formatting, linting (clippy warnings are errors), builds, docs, and 
 
 ## Asana API Notes
 
-| Concept | Notes |
-|---------|-------|
-| **GID** | Global identifier - always a string, never an integer |
-| **Pagination** | Offset-based with `next_page.offset` token; `Client::get_all()` handles automatically |
-| **Status colors** | Can be color names (`green`) or semantic (`on_track`) - see `StatusColor` enum |
+| Concept           | Notes                                                                                 |
+|-------------------|---------------------------------------------------------------------------------------|
+| **GID**           | Global identifier - always a string, never an integer                                 |
+| **Pagination**    | Offset-based with `next_page.offset` token; `Client::get_all()` handles automatically |
+| **Status colors** | Can be color names (`green`) or semantic (`on_track`) - see `StatusColor` enum        |
