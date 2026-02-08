@@ -1,5 +1,6 @@
 //! API modules for the Asana API endpoints.
 
+pub mod events;
 pub mod favorites;
 pub mod portfolios;
 pub mod projects;
@@ -12,6 +13,7 @@ pub mod templates;
 pub mod users;
 pub mod workspaces;
 
+pub use events::EventsApi;
 pub use favorites::{
     extract_task_status, FavoritesData, FetchError, FetchFavoritesOptions, ProjectWithContext,
 };

@@ -2,6 +2,7 @@
 
 pub mod common;
 pub mod custom_field;
+pub mod event;
 pub mod portfolio;
 pub mod project;
 pub mod requests;
@@ -20,6 +21,7 @@ pub use custom_field::{
     extract_status_field, CustomFieldDefinition, CustomFieldSetting, CustomFieldType,
     CustomFieldValue, DateValue, EnumOption, ExtractedStatus, StatusExtractionOptions,
 };
+pub use event::{Event, EventChange, EventsResponse, EventsSyncReset};
 pub use portfolio::{Portfolio, PortfolioItem, PortfolioItemRef};
 pub use project::Project;
 pub use requests::Job;

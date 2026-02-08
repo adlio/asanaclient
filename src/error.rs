@@ -38,4 +38,11 @@ pub enum Error {
         /// The validation error message.
         message: String,
     },
+
+    /// The sync token has expired. Contains a fresh token to use after a full re-sync.
+    #[error("sync token expired")]
+    SyncTokenExpired {
+        /// The fresh sync token provided by the API.
+        sync: String,
+    },
 }
