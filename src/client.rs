@@ -13,6 +13,7 @@ const ENV_VAR: &str = "ASANA_TOKEN";
 pub struct Client {
     http: reqwest::Client,
     base_url: String,
+    page_size: Option<u32>,
 }
 
 impl Client {
@@ -54,6 +55,7 @@ impl Client {
         Ok(Self {
             http,
             base_url: BASE_URL.to_string(),
+            page_size: None,
         })
     }
 
@@ -71,6 +73,16 @@ impl Client {
     #[doc(hidden)]
     pub fn with_base_url(mut self, base_url: &str) -> Self {
         self.base_url = base_url.to_string();
+        self
+    }
+
+    /// Set the page size for paginated API requests.
+    ///
+    /// When set, this value is sent as the `limit` query parameter on all
+    /// paginated (`get_all`) requests. Useful for reducing request sizes
+    /// on endpoints that may time out with the default page size (100).
+    pub fn with_page_size(mut self, page_size: u32) -> Self {
+        self.page_size = Some(page_size);
         self
     }
 
@@ -118,18 +130,21 @@ impl Client {
     {
         let mut all_items = Vec::new();
         let mut offset: Option<String> = None;
+        let limit_str = self.page_size.map(|ps| ps.to_string());
+        let caller_has_limit = query.iter().any(|(k, _)| *k == "limit");
 
         loop {
-            let query_with_offset: Vec<(&str, &str)> = match &offset {
-                Some(off) => {
-                    let mut q = query.to_vec();
-                    q.push(("offset", off.as_str()));
-                    q
+            let mut q = query.to_vec();
+            if let Some(ref off) = offset {
+                q.push(("offset", off.as_str()));
+            }
+            if let Some(ref limit) = limit_str {
+                if !caller_has_limit {
+                    q.push(("limit", limit.as_str()));
                 }
-                None => query.to_vec(),
-            };
+            }
 
-            let wrapper: ListWrapper<T> = self.get_list(path, &query_with_offset).await?;
+            let wrapper: ListWrapper<T> = self.get_list(path, &q).await?;
             all_items.extend(wrapper.data);
 
             offset = wrapper.next_page.map(|next| next.offset);
@@ -786,6 +801,51 @@ mod tests {
     }
 
     // ========== extract_error_message tests ==========
+
+    #[tokio::test]
+    async fn test_get_all_with_page_size() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/items"))
+            .and(query_param("limit", "25"))
+            .and(NoOffset)
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [
+                    {"gid": "1", "name": "Item 1"},
+                    {"gid": "2", "name": "Item 2"}
+                ],
+                "next_page": null
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server).with_page_size(25);
+        let items: Vec<TestItem> = client.get_all("/items", &[]).await.unwrap();
+
+        assert_eq!(items.len(), 2);
+    }
+
+    #[tokio::test]
+    async fn test_get_all_page_size_does_not_override_caller_limit() {
+        let server = MockServer::start().await;
+
+        Mock::given(method("GET"))
+            .and(path("/items"))
+            .and(query_param("limit", "10"))
+            .and(NoOffset)
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                "data": [{"gid": "1", "name": "Item 1"}],
+                "next_page": null
+            })))
+            .mount(&server)
+            .await;
+
+        let client = test_client(&server).with_page_size(25);
+        let items: Vec<TestItem> = client.get_all("/items", &[("limit", "10")]).await.unwrap();
+
+        assert_eq!(items.len(), 1);
+    }
 
     #[test]
     fn test_extract_error_message_valid() {
