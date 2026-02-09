@@ -3,7 +3,7 @@
 
 .DEFAULT_GOAL := help
 
-.PHONY: help test coverage coverage-html build build-release clean fmt fmt-check lint check doc doc-check all ci ensure-tools
+.PHONY: help test coverage coverage-html build build-release install clean fmt fmt-check lint check doc doc-check all ci ensure-tools
 
 # Tool installation helpers
 CARGO_NEXTEST := $(shell command -v cargo-nextest 2>/dev/null)
@@ -41,10 +41,10 @@ check: ## Run cargo check
 	cargo check --all-targets --all-features
 
 fmt: ## Format code
-	cargo fmt
+	cargo fmt --all
 
 fmt-check: ## Check formatting
-	cargo fmt -- --check
+	cargo fmt --all -- --check
 
 lint: ## Run clippy
 	cargo clippy --all-targets --all-features -- -D warnings
@@ -57,6 +57,9 @@ doc: ## Generate docs
 
 doc-check: ## Check docs build without warnings
 	RUSTDOCFLAGS="-D warnings" cargo doc --no-deps
+
+install: ## Install asanaclient to ~/.cargo/bin
+	cargo install --path .
 
 all: ensure-tools fmt lint build test ## Format, lint, build, and test
 
