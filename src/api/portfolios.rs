@@ -62,11 +62,14 @@ impl<'a> PortfoliosApi<'a> {
 
     /// Get status updates for a portfolio.
     pub async fn status_updates(&self, gid: &str) -> Result<Vec<StatusUpdate>, Error> {
-        let path = format!("/portfolios/{}/status_updates", gid);
-        let query = [(
-            "opt_fields",
-            "gid,title,text,html_text,status_type,created_at,created_by,created_by.name",
-        )];
+        let path = "/status_updates".to_string();
+        let query = [
+            ("parent", gid),
+            (
+                "opt_fields",
+                "gid,title,text,html_text,status_type,created_at,created_by,created_by.name",
+            ),
+        ];
         self.client.get_all(&path, &query).await
     }
 
