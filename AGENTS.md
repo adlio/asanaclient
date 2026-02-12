@@ -78,6 +78,20 @@ This checks formatting, linting (clippy warnings are errors), builds, docs, and 
 6. Re-export from `lib.rs` if it's a commonly-used type
 7. Run `make ci`
 
+## Releasing
+
+Pushing a version tag triggers the release workflow (`.github/workflows/release.yml`),
+which creates a GitHub release and publishes to crates.io.
+
+1. Update `CHANGELOG.md` with the new version's changes under a `## [x.y.z]` heading
+2. Bump the version in `Cargo.toml`
+3. Commit: `chore: bump version to x.y.z`
+4. Tag and push: `git tag vx.y.z && git push origin main --tags`
+
+The workflow will:
+- Extract the changelog section for the version and use it as GitHub release notes
+- Run `cargo publish` using the `CARGO_REGISTRY_TOKEN` repository secret
+
 ## Asana API Notes
 
 | Concept           | Notes                                                                                 |
